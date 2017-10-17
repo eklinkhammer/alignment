@@ -32,7 +32,7 @@ randomPOI :: Dims -> IO POI
 randomPOI dims = do
   loc <- randomLoc dims
   val <- randomRIO (1,10)
-  return (POI loc val)
+  return (POI loc val 4 1)
   
 -- | World changes. This determines which states are adjacent to each other. 
 perturbWorld :: World -> IO World

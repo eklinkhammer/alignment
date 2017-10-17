@@ -18,6 +18,9 @@ library
   exposed-modules:     Lib
                      , Types
                      , Location
+                     , Agent
+                     , Objective
+                     , World
   build-depends:       base >= 4.7 && < 5
                      , vector
                      , random-fu

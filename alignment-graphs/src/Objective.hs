@@ -31,18 +31,25 @@ global r coupling world = sum $ map (poiValue r coupling agentLocs) (pois world)
 
 -- | A greedy rover domain. For all agents, they score for all pois if they are
 --     within the observation radius.
-infinitePOIs :: ObservationRadius -> Coupling -> Objective
-infinitePOIs r world = sum $ map (agentValue ps) (agents world)
+infinitePOIs :: ObservationRadius -> Objective
+infinitePOIs r world = sum $ map (agentValue r ps) (agents world)
   where
     ps = pois world
-    agentValue :: [POI] -> Agent -> Double
-    agentValue allPs agent = let aLoc = location agent
-                             in sum $ map (poiValue r 1 aLoc) allPs
+    
+agentValue :: ObservationRadius -> [POI] -> Agent -> Double
+agentValue r allPs agent = let aLoc = location agent
+                           in sum $ map (poiValue r 1 [aLoc]) allPs
 
 -- | A partially greedy take on the rover domain. Each agent can only score with the
 --     closest POI, but it ignores other agents.
 onePOI :: ObservationRadius -> Objective
-onePOI = undefined
+onePOI r world = sum $ map (\a -> agentValue r (closestPOI 1 ps a) a) (agents world)
+  where
+    ps = pois world
+    closestPOI :: Int -> [POI] -> Agent -> [POI]
+    closestPOI n pois agent =
+      let l = location agent
+      in take n $ sortOn (\p -> norm (pLocation p - l)) ps
 
 -- | Team forming domain. For a given team size, the sum of all agents that have
 --     successfully formed teams. The score is weighted by the inverse of the average
@@ -69,7 +76,7 @@ poiValue radius coupling locs p =  value
             in if numSatisfy < coupling then 0
                else (pValue p) / (totalDist / (fromIntegral numSatisfy))
                     
-type Coupling = Int
+
 type TeamSize = Int
-type ObservationRadius = Double
+
 type TeamRadius = Double

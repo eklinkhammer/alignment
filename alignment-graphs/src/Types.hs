@@ -7,7 +7,8 @@ type Objective = (World -> Double)
 type Point = [Double]
 type Mutation = (Point -> Point)
 type AlignmentScore = ([[Bool]] -> [Double])
-
+type ObservationRadius = Double
+type Coupling = Int
 newtype Location = Location (Double, Double)
   deriving (Eq, Show)
 
@@ -24,8 +25,10 @@ data Agent = Agent {
   } deriving (Eq, Show)
 
 data POI = POI {
-  pLocation :: Location,
-  pValue :: Value
+    pLocation :: Location
+  , pValue :: Value
+  , pCoupling :: Coupling
+  , pObservationRadius :: ObservationRadius
   } deriving (Eq, Show)
 
 data World = World {
