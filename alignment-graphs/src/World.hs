@@ -3,36 +3,59 @@ module World
     randomWorld
   , perturbWorld
   , extractPoints
+  , dims
+  , World (..)
+  , initWorld
   ) where
 
 
 import Types
 import Agent
 import Location
+import POI (initPOI)
 
 import System.Random (randomRIO)
 import Control.Monad (replicateM)
 import Data.List (groupBy, sortOn)
 
+import System.IO.Unsafe
+
+
 randomWorld :: IO World
 randomWorld = do
-  width  <- randomRIO (10,100)
-  height <- randomRIO (10,100)
+  width  <- randomRIO (10,100) >>= return . Width
+  height <- randomRIO (10,100) >>= return . Height
 
   numAgents <- randomRIO (4,10)
   numPOIs   <- randomRIO (4,10)
-  
+
   let dims = Dims (height, width)
   agents <- replicateM numAgents (randomAgent dims)
   pois   <- replicateM numPOIs (randomPOI dims)
 
-  return (World dims agents pois)
+  return (World width height numAgents numPOIs agents pois)
 
 randomPOI :: Dims -> IO POI
 randomPOI dims = do
   loc <- randomLoc dims
   val <- randomRIO (1,10)
   return (POI loc val 4 1)
+
+initWorld :: World -> IO World
+initWorld (World (Width w) (Height h) nA nP as ps) = do
+  h' <- if h < 0 then randomRIO (10, 100) >>= return . Height else return $ Height h
+  w' <- if w < 0 then randomRIO (10, 100) >>= return . Width else return $ Width w
+  
+  let nA_' = if nA == (-1) then length as else nA
+      nP_' = if nP == (-1) then length ps else nP
+      as_ = take nA_' $ as ++ (repeat notInitAgent)
+      ps_ = take nP_' $ ps ++ (repeat notInitPOI)
+      dims_ = Dims (h', w')
+      
+  as_' <- mapM return as_ -- TODO
+  ps_' <- mapM (initPOI dims_) ps_
+
+  return $ World w' h' nA_' nP_' as_' ps_'
   
 -- | World changes. This determines which states are adjacent to each other. 
 perturbWorld :: World -> IO World
@@ -48,7 +71,10 @@ extractPoints world = map (agentState world) (agents world)
 agentState :: World -> Agent -> Point
 agentState world agent = eachQuadVal
   where
-    poiQuadScores = map (poiQuadScore agent) (pois world)
+    poiQuadScores = unsafePerformIO $ do
+      let x = map (poiQuadScore agent) (pois world)
+      putStrLn $ show x
+      return x
     agentQuadScores = map (agentQuadScore agent) (filter (/= agent) (agents world))
     quadScores = poiQuadScores ++ agentQuadScores ++ map (\i -> (0,i)) [0..7]
     inQuadOrder = sortOn snd quadScores
@@ -71,7 +97,7 @@ quad agent loc = (value, quadrant)
   where
     locv = global2Body agent (loc - (location agent))
     diff = (location agent) - locv
-    theta = locatan2 diff
+    theta = locatan2 locv
     diffNorm = norm diff
     quadrant = angleQuad theta
     value = 1.0 / (max diffNorm 1.0)
@@ -82,3 +108,7 @@ angleQuad theta
   | theta >= 0        = 0
   | theta >= (-1) * pi / 2.0 = 1
   | otherwise = 2
+
+
+dims :: World -> Dims
+dims w = Dims (height w, width w)

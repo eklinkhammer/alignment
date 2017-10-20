@@ -1,3 +1,6 @@
+{-# LANGUAGE OverloadedStrings #-}
+{-# LANGUAGE DeriveGeneric #-}
+
 module Agent
   (
     randomAgent
@@ -7,6 +10,13 @@ module Agent
 import Types
 import Location
 import System.Random (randomRIO)
+
+import GHC.Generics
+import Data.Aeson (FromJSON(..), withObject, withText, (.:), (.:?), (.!=))
+import Data.Yaml (decodeEither)
+import Data.Text (Text)
+import Control.Applicative
+
 
 randomAgent :: Dims -> IO Agent
 randomAgent dims = do
@@ -22,7 +32,4 @@ perturbAgent agent@(Agent location heading) = do
       newLoc = location + dv
       newPsi = min (-pi) $ max pi (dpsi + heading)
   return (Agent newLoc newPsi)
-
-  
-
 

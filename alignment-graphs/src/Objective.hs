@@ -37,33 +37,49 @@ infinitePOIs r world = sum $ map (agentValue r ps) (agents world)
     ps = pois world
     
 agentValue :: ObservationRadius -> [POI] -> Agent -> Double
-agentValue r allPs agent = let aLoc = location agent
-                           in sum $ map (poiValue r 1 [aLoc]) allPs
+agentValue r allPs agent = sum $ map (\p -> getValue r 1 (pValue p) p [agent]) allPs
 
 -- | A partially greedy take on the rover domain. Each agent can only score with the
 --     closest POI, but it ignores other agents.
 onePOI :: ObservationRadius -> Objective
-onePOI r world = sum $ map (\a -> agentValue r (closestPOI 1 ps a) a) (agents world)
+onePOI r world = sum $ map (\a -> agentValue r (closestN 1 a ps) a) (agents world)
   where
     ps = pois world
-    closestPOI :: Int -> [POI] -> Agent -> [POI]
-    closestPOI n pois agent =
-      let l = location agent
-      in take n $ sortOn (\p -> norm (pLocation p - l)) ps
 
 -- | Team forming domain. For a given team size, the sum of all agents that have
 --     successfully formed teams. The score is weighted by the inverse of the average
 --     distance from the agent to its closest team members (larger groups only count the
 --     closest agents up to the team size). 
 team :: TeamRadius -> TeamSize -> Objective
-team = undefined
+team radius size world =
+  let as = agents world
+  in sum $ map (\a -> getValue radius size 1.0 a (filter (/= a) as)) as
+
+getValue :: (Located a, Located b) => Double -> Int -> Double -> a -> [b] -> Double
+getValue radius required value x xs = val
+  where
+    norms = map (distance x) xs
+    within = filter (<= radius) norms
+    coupling = take required $ sort within
+    totalDist = sum coupling
+    val = let numSatisfy = length coupling
+          in if numSatisfy < required then 0
+             else value / (max 1.0 (totalDist / (fromIntegral numSatisfy)))
+
+closestN :: (Located a, Located b) => Int -> b -> [a] -> [a]
+closestN n one = take n . sortOn (distance one)
+
+within :: (Located a, Located b) => Double -> a -> [b] -> [b]
+within r x = filter (\y -> distance x y <= r)
 
 -- | Exploration domain. For a given repulsion factor, the sum of all agents that
 --     have moved beyond a certain radius from that number of other agents. Agents
 --     still within that radius receive a scaled reward based on the average distance
 --     to the furthest agents beyond the repulsion factor.
 explore :: TeamRadius -> TeamSize -> Objective
-explore = undefined
+explore radius size world =
+  let as = agents world
+  in sum $ map (\a -> 1 - (getValue radius size 1.0 a (filter (/= a) as))) as
 
 poiValue :: ObservationRadius -> Coupling -> [Location] -> POI -> Double
 poiValue radius coupling locs p =  value
@@ -74,7 +90,7 @@ poiValue radius coupling locs p =  value
     totalDist = sum couplingReq
     value = let numSatisfy = length couplingReq
             in if numSatisfy < coupling then 0
-               else (pValue p) / (totalDist / (fromIntegral numSatisfy))
+               else (pValue p) / (max 1.0 (totalDist / (fromIntegral numSatisfy)))
                     
 
 type TeamSize = Int
