@@ -18,13 +18,10 @@ import System.Random (randomRIO)
 import Control.Monad (replicateM)
 import Data.List (groupBy, sortOn)
 
-import System.IO.Unsafe
-
-
 randomWorld :: IO World
 randomWorld = do
-  width  <- randomRIO (10,100) >>= return . Width
-  height <- randomRIO (10,100) >>= return . Height
+  width  <- randomRIO (10,30) >>= return . Width
+  height <- randomRIO (10,30) >>= return . Height
 
   numAgents <- randomRIO (4,10)
   numPOIs   <- randomRIO (4,10)
@@ -71,10 +68,7 @@ extractPoints world = map (agentState world) (agents world)
 agentState :: World -> Agent -> Point
 agentState world agent = eachQuadVal
   where
-    poiQuadScores = unsafePerformIO $ do
-      let x = map (poiQuadScore agent) (pois world)
-      putStrLn $ show x
-      return x
+    poiQuadScores = map (poiQuadScore agent) (pois world)
     agentQuadScores = map (agentQuadScore agent) (filter (/= agent) (agents world))
     quadScores = poiQuadScores ++ agentQuadScores ++ map (\i -> (0,i)) [0..7]
     inQuadOrder = sortOn snd quadScores

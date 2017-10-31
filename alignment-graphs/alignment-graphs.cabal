@@ -22,14 +22,20 @@ library
                      , Objective
                      , World
                      , POI
+                     , Simulation
   build-depends:       base >= 4.7 && < 5
-                     , vector
-                     , random-fu
+                     , aeson
+                     , containers
+                     , hmatrix
+                     , KdTree
+                     , neural-algorithms
                      , normaldistribution
                      , random
-                     , aeson
-                     , yaml
+                     , random-fu
                      , text
+                     , vector
+                     , yaml
+                     
   default-language:    Haskell2010
 
 executable alignment-graphs-exe
@@ -41,8 +47,14 @@ executable alignment-graphs-exe
                      , text
                      , aeson
                      , yaml
-                     , bytestring
                      , postgresql-simple
+                     , bytestring
+                     , vector
+                     , KdTree
+                     , neural-algorithms
+                     , containers
+                     , random
+                     
   default-language:    Haskell2010
 
 test-suite alignment-graphs-test

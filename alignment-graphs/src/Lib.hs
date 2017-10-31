@@ -2,6 +2,8 @@ module Lib
     ( aligned
     , getAlignmentScores
     , objectiveAlignments
+    , generateTree
+    , generateKPoints
     ) where
 
 import Data.Random.Normal
@@ -9,11 +11,42 @@ import System.Random
 import Control.Monad
 import Data.List
 
+
 import Objective
 import Types
 import Location
 import Agent
 import World
+
+import qualified Data.Vector as V
+import qualified Data.Trees.KdTree as K
+
+data KPoint = KPoint (V.Vector Double) [Alignment] deriving (Eq, Show)
+
+-- | Hard coded KdTree instance
+instance K.Point KPoint where
+  dimension _ = 8
+  coord i (KPoint vec _) = vec V.! i
+  dist2 (KPoint vec1 _) (KPoint vec2 _) = sum $ V.map (\x -> x * x) $ V.zipWith (-) vec2 vec1
+
+generateTree :: FeatureExtractor -> Objective -> [Objective]
+  -> Int -- ^ Number of worlds to generate
+  -> Int -- ^ Samples per world
+  -> IO (K.KdTree KPoint)
+generateTree feature g objs numWorlds numSamples = do
+  inits <- replicateM numWorlds randomWorld :: IO [World]
+  kpoints <- mapM (generateKPoints feature numSamples g objs) inits
+  return $ K.fromList $ concat kpoints
+
+generateKPoints :: FeatureExtractor -> Int -> Objective -> [Objective] -> World -> IO ([KPoint])
+generateKPoints feature numSamples g objs init = do
+  next <- replicateM numSamples (perturbWorld init)
+  return $ makeKPoint $ aligned feature g init next objs
+  
+makeKPoint :: ([Point], [[Alignment]]) -> [KPoint]
+makeKPoint (pts, alignments) =
+  let a = map qalign alignments
+  in map (\p -> KPoint (V.fromList p) a) pts
 
 -- | Calculates, for a set of different worlds, the alignment of a set of
 --     objectives.
@@ -29,19 +62,7 @@ aligned :: FeatureExtractor  -- ^ A means of extracting a state from the world
         -> ([Point], [[Alignment]])
 aligned feature g init nextWorlds objs = (feature init, alignments)
   where
-    -- Get the difference in g for the set of steps being considered
-    g_init = g init -- 
-    g_nexts = map g nextWorlds -- [g(1), g(2)]
-    g_diffs = map (\x -> x - g_init) g_nexts :: [Double]-- [g(1) - g(
-
-    -- Get the difference in obj for the set of steps being considered, for all obj
-    o_inits = map ($ init) objs
-    --o_nexts = map (\obj -> map obj nextWorlds) objs
-    o_nexts = map (\w -> map ($ w) objs) nextWorlds
-    o_diffs = map (\on -> zipWith (-) on o_inits) o_nexts :: [[Double]]
-
-    -- [ [d_o1(s1), d_o2(s1)], [d_o1(s2), ..
-    alignments = map (\(g_i, all_objs) -> map (alignment g_i) all_objs) (zip g_diffs o_diffs)
+    alignments = objectiveAlignments init g nextWorlds objs
 
 
 -- | Calculates for each objective a list of alignments (number between 1-9 representing
@@ -81,24 +102,32 @@ objectiveAlignments w_o g ws objs = aligns_t
     -- For all objectives, for all sampled worlds, the alignment of that objective
     --   with g.
     aligns_t = transpose aligns
+
+-- Alignment Scores. Ordered by relative goodness
 alignment :: Double -> Double -> Alignment
 alignment x y
   | x >  0 && y >  0 = Alignment 1
   | x >  0 && y == 0 = Alignment 2
-  | x >  0 && y <  0 = Alignment 3
-  | x == 0 && y >  0 = Alignment 4
-  | x == 0 && y == 0 = Alignment 5
-  | x == 0 && y <  0 = Alignment 6
-  | x <  0 && y >  0 = Alignment 7
-  | x <  0 && y == 0 = Alignment 8
-  | x <  0 && y <  0 = Alignment 9
-
+  | x == 0 && y >  0 = Alignment 3
+  | x == 0 && y == 0 = Alignment 4
+  | x <  0 && y <  0 = Alignment 5
+  | x <  0 && y == 0 = Alignment 6
+  | x <  0 && y >  0 = Alignment 7 
+  | x == 0 && y <  0 = Alignment 8
+  | x >  0 && y <  0 = Alignment 9
+  
 
 uniformWeight :: AlignmentScore
 uniformWeight = map uniformAlign
   where
     uniformAlign :: [Bool] -> Double
     uniformAlign a = (fromIntegral (length $ filter id a)) / (fromIntegral (length a))
+
+compressAlignment :: Alignment -> Alignment -> Alignment
+compressAlignment (Alignment x) (Alignment y) = Alignment (min x y)
+
+qalign :: [Alignment] -> Alignment
+qalign = foldr compressAlignment (Alignment 9)
 
 -- | Maps from a world and a list of objectives to the list of states defined by
 --     the world and the alignment that all of the objectives have in those states

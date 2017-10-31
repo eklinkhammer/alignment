@@ -27,8 +27,6 @@ randomLoc :: Dims -> IO Location
 randomLoc (Dims ((Height height), (Width width))) = do
   x <- randomRIO (0, width)
   y <- randomRIO (0, height)
-  putStrLn $ show width
-  putStrLn $ show height
   return $ Location x y
 
 randomNormalLoc :: IO Location

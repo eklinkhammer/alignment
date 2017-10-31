@@ -5,6 +5,7 @@ module Agent
   (
     randomAgent
   , perturbAgent
+  , moveAgent
   ) where
 
 import Types
@@ -25,11 +26,12 @@ randomAgent dims = do
   return (Agent loc h)
 
 perturbAgent :: Agent -> IO Agent
-perturbAgent agent@(Agent location heading) = do
-  rLoc <- randomNormalLoc
-  let dv = body2Global agent rLoc
+perturbAgent a = randomNormalLoc >>= return . moveAgent a
+
+moveAgent :: Agent -> Location -> Agent
+moveAgent agent@(Agent location heading) cmd =
+  let dv = body2Global agent cmd
       dpsi = locatan2 dv
       newLoc = location + dv
       newPsi = min (-pi) $ max pi (dpsi + heading)
-  return (Agent newLoc newPsi)
-
+  in Agent newLoc newPsi
