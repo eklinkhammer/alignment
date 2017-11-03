@@ -28,6 +28,7 @@ library
                      , containers
                      , hmatrix
                      , KdTree
+                     , mtl
                      , neural-algorithms
                      , normaldistribution
                      , random

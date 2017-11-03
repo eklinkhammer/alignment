@@ -1,6 +1,8 @@
+{-# LANGUAGE FlexibleContexts #-}
 module Simulation
   (
     simFitness
+  , simStep
   ) where
 
 import Types
@@ -16,14 +18,25 @@ import System.Random
 import NN.NeuralNetwork
 import Numeric.LinearAlgebra.HMatrix hiding (corr)
 
-simFitness :: NN n => Objective -> Int -> World -> [n] -> (World, [Double])
-simFitness obj n world nets = let w = simulation n world nets
-                                  g = obj w
-                              in (w, replicate (_numAgents world) g)
+import Control.Monad.Writer
+import System.IO.Unsafe
 
-simulation :: NN n => Int -> World -> [n] -> World
-simulation 0 world nets = world
-simulation n world nets = simulation (n-1) (simStep world nets) nets
+simFitnessWriter obj n world nets = do
+  tell (show world)
+  return (simFitness obj n world nets)
+
+simFitness :: NN n => Objective -> Int -> World -> [n] -> (World, [Double])
+simFitness obj n world nets = let (w,r) = unsafePerformIO $ do
+                                    let (w',r') = simulation obj n world nets
+                                    --putStrLn $ show r'
+                                    return (w',r')
+                              in (w, replicate (_numAgents world) r)
+
+simulation :: NN n => Objective -> Int -> World -> [n] -> (World, Double)
+simulation obj 0 world nets = (world, obj world)
+simulation obj n world nets =
+  let (w,r) = simulation obj (n-1) (simStep world nets) nets
+  in (w, max r (obj world))
 
 simStep :: NN n => World -> [n] -> World
 simStep world nets = world { agents = newAgents }
@@ -40,4 +53,6 @@ toVec :: Point -> Vector Double
 toVec = fromList
 
 fromVec :: Vector Double -> Location
-fromVec vec = Location (vec ! 0) (vec ! 1)
+fromVec vec = let l = Location (vec ! 0) (vec ! 1)
+                  n = norm l
+              in Location (x l / n) (y l / n)

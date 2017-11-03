@@ -5,6 +5,7 @@ module POI
 
 import System.Random (randomRIO)
 
+import System.IO.Unsafe
 
 import Location (randomLoc)
 import Types (POI (..), notInitPOI, Dims)
@@ -20,5 +21,8 @@ initPOI dims (POI loc val coupling radius) = do
     coupling' <- if coupling == (pCoupling notInitPOI)
                  then return 1 else return coupling
     radius'   <- if radius == (pObservationRadius notInitPOI)
-                 then return 4 else return radius
+                 then return 4
+                 else do
+      putStrLn $ show radius
+      return radius
     return $ POI loc' val' coupling' radius'

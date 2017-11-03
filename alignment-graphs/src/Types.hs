@@ -32,7 +32,7 @@ newtype Dims = Dims (Height, Width)
   deriving (Eq, Show)
 
 newtype Alignment = Alignment Int
-  deriving (Eq, Show)
+  deriving (Eq, Show, Ord)
 
 class Located a where
   getLocation :: a -> Location

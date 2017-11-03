@@ -4,13 +4,14 @@ module Lib
     , objectiveAlignments
     , generateTree
     , generateKPoints
+    , KPoint (..)
+    , whichObj
     ) where
 
 import Data.Random.Normal
 import System.Random
 import Control.Monad
 import Data.List
-
 
 import Objective
 import Types
@@ -22,6 +23,11 @@ import qualified Data.Vector as V
 import qualified Data.Trees.KdTree as K
 
 data KPoint = KPoint (V.Vector Double) [Alignment] deriving (Eq, Show)
+
+whichObj :: KPoint -> Int
+whichObj (KPoint _ as) = snd $ head $ sortOn fst withI 
+  where
+    withI = zip as [0..]
 
 -- | Hard coded KdTree instance
 instance K.Point KPoint where

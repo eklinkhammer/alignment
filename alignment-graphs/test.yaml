@@ -1,20 +1,13 @@
-height: 30
-width: 30
+height: 4
+width: 4
 agents:
   - location:
-      x : 4
-      y : 2
-  - location:
-      x : 4
-      y : 1
+      x : 0
+      y : 0
 pois:
   - pLocation:
-      x : 2
-      y : 3
+      x : 4
+      y : 4
     pValue: 10
     pCoupling: 1
-  - pLocation:
-      x : 4
-      y : 0
-    pValue: 5
-    pCoupling: 1
+    pObservationRadius: 3

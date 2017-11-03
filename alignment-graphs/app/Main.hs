@@ -17,6 +17,7 @@ import Data.Aeson (FromJSON(..), withObject, withText, (.:), (.:?), (.!=))
 import Data.Yaml (decodeEither)
 import Data.Text (Text)
 import Control.Applicative
+import Data.List
 import qualified Data.ByteString.Char8 as B
 
 import Database.PostgreSQL.Simple
@@ -28,9 +29,9 @@ import NN.NeuralNetwork
 import CCEA
 
 nnVars :: NNVars
-nnVars = Map.fromList [("numberInputs", 2)
-                      ,("numberHidden", 2)
-                      ,("numberOutputs",1)
+nnVars = Map.fromList [("numberInputs", 8)
+                      ,("numberHidden", 1)
+                      ,("numberOutputs",2)
                       ,("timesToTrain",1)
                       ,("learningRate",0.25)
                       ,("sigmoidOrTanh",0)
@@ -38,54 +39,107 @@ nnVars = Map.fromList [("numberInputs", 2)
                       ,("randomUpperBound", 2)
                       ,("gaussianMean", 0)
                       ,("gaussianStdDev", 1)
-                      ,("mutationRate", 0.5)]
+                      ,("mutationRate", 0.1)]
 
-fitness :: NN n => CCEAFitnessFunction n World
-fitness = simFitness (global 4 1) 20
+fitness :: NN n => Objective -> CCEAFitnessFunction n World
+fitness obj = simFitness obj 1
 
 breeding :: (RandomGen g, NN n) => BreedingStrategy n g
 breeding = mutateWeights
 
 breedingStrat :: (RandomGen g, NN n) => BreedingStrategy n g
-breedingStrat g = notElitist breeding breeding g
+breedingStrat g = elitist breeding g
 
-agentCCEA :: RandomGen g => World -> IO (CCEA Net World g)
-agentCCEA w = do
-  pop <- replicateM (_numAgents w) (replicateM 2 (create nnVars) :: IO [Net])
-  return $ CCEA pop fitness breedingStrat (tournament 2) w
+agentCCEA :: RandomGen g => Objective -> World -> IO (CCEA Net World g)
+agentCCEA obj w = do
+  pop <- createPopulation (_numAgents w) 1 nnVars
+  return $ CCEA pop (fitness obj) breedingStrat (tournament 2) w
   
 showPoints = putStrLn . show . extractPoints
 
+-- True if a generated point has the same objective selectede as its nearest neighbor
+-- True also if the generated point selected an objective with the same alignment score (can't
+-- be penalizing for ties)
+testPoint tree g objs = do
+  testW      <- randomWorld
+  testKPoint <- generateKPoints extractPoints 1 g objs testW
+  
+  let p        = head testKPoint
+      neighbor = nearestNeighbor tree p
+      
+  return $ case neighbor of
+             Nothing -> False
+             (Just x) -> whichObj p == whichObj x || let (KPoint _ as) = x
+                                                         (KPoint _ bs) = p
+                                                     in as !! (whichObj x) == bs !! (whichObj p)
 
+testTree tree g objs = do
+  test <- replicateM 100 (testPoint tree g objs)
+  let score = length $ filter id test
+  return (fromIntegral score / 100.0)
+
+bestPolicyWithScore ccea obj w = do
+  putStr "Objective value before running any policies: "
+  putStrLn $ show (obj w)
+  let teams = transpose (_pop ccea)
+      scores = map (head . snd . simFitness obj 10 w) teams
+  putStrLn $ show scores
+  return $ head $ reverse $ sortOn snd (zip teams scores)
+
+out s = putStrLn . ((++) s) . show . snd 
 main :: IO ()
 main = do
-  -- conn <- connect defaultConnectInfo {
-  --   connectDatabase = "postgres"
-  --   }
-
-  -- putStrLn "3 + 5"
-  -- mapM_ print =<< (query conn "select ? + ?" (3 :: Int, 5 :: Int) :: IO [Only Int])
-
-  let g    = global 4 3 :: Objective
+  let g    = global 6 1 :: Objective
       obj  = onePOI 4   :: Objective
-      obj2 = team 4 2  :: Objective
-      obj3 = explore 4 3 :: Objective
+      obj2 = team 4 1  :: Objective
+      obj3 = explore 4 1 :: Objective
       obj4 = infinitePOIs 4 :: Objective
       objs = [obj, obj2, obj3, obj4] :: [Objective]
+
+  contents <- B.readFile "test.yaml"
+  let parsedContent = decodeEither contents :: Either String World
+  case parsedContent of
+    (Left str) -> error str
+    (Right c)  -> do
+      world <- initWorld c
+      --world <- resetWorld world_i
+      cceaObj <- agentCCEA g world :: IO (CCEA Net World StdGen)
+      gen <- getStdGen
+      let (gen', cceaObjT) = evolveNCCEA 1 gen cceaObj
+      putStrLn $ show world
+      bestPolicyWithScore cceaObj g world >>= out "After objective: "
+      bestPolicyWithScore cceaObjT g world >>= out "After training, post policy: "
+      putStrLn $ show $ map (map getWeights) (_pop cceaObj)
+      putStrLn $ show $ map (map getWeights) (_pop cceaObjT)
+      -- cceaObj3 <- agentCCEA obj3 world :: IO (CCEA Net World StdGen)
+      -- gen <- getStdGen
+      -- let (gen', cceaObj3T) = evolveNCCEA 20 gen cceaObj3
+      -- bestPolicyWithScore cceaObj3 obj3 world >>= putStrLn . show . snd
+      -- bestPolicyWithScore cceaObj3T obj3 world >>= putStrLn . show . snd
       
-  kdtree <- generateTree extractPoints g objs 10 10
+  -- putStrLn "Success Rate: 10 worlds with 20 wiggles"
+  -- tree10 <- generateTree extractPoints g objs 10 20
+  -- testTree tree10 g objs >>= putStrLn . show
+  
+  -- putStrLn "Success Rate: 100 worlds with 10 wiggles"
+  -- tree20 <- generateTree extractPoints g objs 100 20
+  -- testTree tree20 g objs >>= putStrLn . show
 
-  testW <- randomWorld
+  -- putStrLn "Success Rate: 1000 worlds with 10 wiggles"
+  -- tree50 <- generateTree extractPoints g objs 1000 20
+  -- testTree tree50 g objs >>= putStrLn . show
 
-  putStrLn "Test point (with calculated alignment values)"
-  testKPoint <- generateKPoints extractPoints 10 g objs testW
-  let p = head testKPoint
-  putStrLn $ show p
-  putStrLn "Nearest Point (with alignment values)"
-  let neighbor = nearestNeighbor kdtree p
-  case neighbor of
-    Nothing -> putStrLn "No neighbor"
-    (Just x) -> putStrLn $ show x
+  -- putStrLn "Success Rate: 2000 worlds with 10 wiggles"
+  -- tree100 <- generateTree extractPoints g objs 2000 20
+  -- testTree tree100 g objs >>= putStrLn . show
+
+  -- putStrLn "Success Rate: 5000 worlds with 10 wiggles"
+  -- tree200 <- generateTree extractPoints g objs 5000 20
+  -- testTree tree200 g objs >>= putStrLn . show
+
+  -- putStrLn "Success Rate: 10000 worlds with 10 wiggles"
+  -- tree1000 <- generateTree extractPoints g objs 10000 20
+  -- testTree tree1000 g objs >>= putStrLn . show
 
   -- init <- randomWorld :: IO World
   -- next <- replicateM 10 randomWorld :: IO [World]
@@ -95,21 +149,4 @@ main = do
   -- putStrLn "Hello World"
   -- putStrLn $ show init
   -- putStrLn $ show $ extractPoints init
-  -- contents <- B.readFile "test.yaml"
-  let parsedContent = decodeEither contents :: Either String World
-  case parsedContent of
-    (Left str) -> error str
-    (Right c)  -> do
-      world <- initWorld c
-      
-  --     putStrLn $ show world
-  --     showPoints world
-  --     putStrLn $ show $ global 4 1 world
-  --     putStrLn $ show $ onePOI 4 world
-  --     putStrLn $ show $ infinitePOIs 4 world
-  
--- do
---   let quads = map (snd . quad agent) [(1,1), (-1,1), (-1,-1), (1,-1)]
---   putStrLn $ show quads
---   randomWorld >>= putStrLn . show . extractPoints
---   --randomWorld >>= getAlignmentScores extractPoints
+

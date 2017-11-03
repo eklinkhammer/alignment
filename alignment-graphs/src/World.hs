@@ -6,6 +6,7 @@ module World
   , dims
   , World (..)
   , initWorld
+  , resetWorld
   ) where
 
 
@@ -32,11 +33,24 @@ randomWorld = do
 
   return (World width height numAgents numPOIs agents pois)
 
+resetWorld :: World -> IO World
+resetWorld world = do
+  newAgents <- replicateM (_numAgents world) (randomAgent (dims world))
+  newPOIs <- mapM (randomizePOI (dims world)) (pois world)
+  let worldWithAgents = world { agents = newAgents }
+  return $ worldWithAgents { pois = newPOIs }
+  
 randomPOI :: Dims -> IO POI
 randomPOI dims = do
   loc <- randomLoc dims
   val <- randomRIO (1,10)
   return (POI loc val 4 1)
+
+randomizePOI :: Dims -> POI -> IO POI
+randomizePOI dims p = do
+  loc <- randomLoc dims
+  val <- randomRIO (1,10)
+  return (POI loc val (pCoupling p) (pObservationRadius p))
 
 initWorld :: World -> IO World
 initWorld (World (Width w) (Height h) nA nP as ps) = do
